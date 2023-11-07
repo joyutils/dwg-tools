@@ -1,0 +1,16 @@
+version: "3.7"
+
+services:
+  dwg-alerter:
+    build:
+      context: .
+      dockerfile: apps/dwg-alerter/Dockerfile
+    container_name: dwg-alerter
+    environment:
+      - ELASTICSEARCH_URL=${ELASTICSEARCH_URL}
+      - ELASTICSEARCH_USERNAME=${ELASTICSEARCH_USERNAME}
+      - ELASTICSEARCH_PASSWORD=${ELASTICSEARCH_PASSWORD}
+      - DISCORD_WEBHOOK_URL=${DISCORD_WEBHOOK_URL}
+      - ALERTS_FILE_PATH=/data/alerts.json
+    volumes:
+      - ./data:/data

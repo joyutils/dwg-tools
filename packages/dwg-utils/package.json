@@ -1,0 +1,23 @@
+{
+  "name": "@joyutils/dwg-utils",
+  "version": "0.1.0",
+  "module": "./dist/index.js",
+  "main": "./dist/index.js",
+  "types": "./src/index.ts",
+  "type": "module",
+  "license": "ISC",
+  "scripts": {
+    "build": "tsup src/index.ts --format esm --dts",
+    "dev": "pnpm run build --watch"
+  },
+  "dependencies": {
+    "@elastic/elasticsearch": "^8.7.0",
+    "dotenv": "^16.3.1"
+  },
+  "devDependencies": {
+    "@types/node": "^20.8.10",
+    "tsconfig": "workspace:*",
+    "tsup": "^7.2.0",
+    "typescript": "^5.2.2"
+  }
+}
