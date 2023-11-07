@@ -13,4 +13,7 @@ services:
       - DISCORD_WEBHOOK_URL=${DISCORD_WEBHOOK_URL}
       - ALERTS_FILE_PATH=/data/alerts.json
     volumes:
-      - ./data:/data
+      - alerter-data:/data
+
+volumes:
+  alerter-data:
