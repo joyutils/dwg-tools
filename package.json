@@ -4,7 +4,9 @@
     "build": "turbo run build",
     "dev": "turbo run dev",
     "lint": "turbo run lint",
-    "format": "prettier --write \"**/*.{ts,tsx,md}\""
+    "format": "prettier --write \"**/*.{ts,tsx,md}\"",
+    "docker:build:alerter": "docker build -t joyutils/dwg-alerter -f apps/dwg-alerter/Dockerfile .",
+    "docker:build:ping": "docker build -t joyutils/dwg-ping -f apps/dwg-ping/Dockerfile ."
   },
   "devDependencies": {
     "prettier": "^3.0.3",

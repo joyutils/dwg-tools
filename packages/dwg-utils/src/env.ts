@@ -9,3 +9,11 @@ export const getRequiredEnv = (name: string): string => {
   }
   return value;
 };
+
+export const getEnv = <T = undefined>(
+  name: string,
+  defaultValue: T
+): string | T => {
+  const value = process.env[name];
+  return value ?? defaultValue;
+};

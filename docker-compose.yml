@@ -14,6 +14,17 @@ services:
       - ALERTS_FILE_PATH=/data/alerts.json
     volumes:
       - alerter-data:/data
+  dwg-ping:
+    build:
+      context: .
+      dockerfile: apps/dwg-ping/Dockerfile
+    container_name: dwg-ping
+    environment:
+      - ELASTICSEARCH_URL=${ELASTICSEARCH_URL}
+      - ELASTICSEARCH_USERNAME=${ELASTICSEARCH_USERNAME}
+      - ELASTICSEARCH_PASSWORD=${ELASTICSEARCH_PASSWORD}
+      - SOURCE_ID=${SOURCE_ID}
+      - TEST_INTERVAL_MIN=5
 
 volumes:
   alerter-data:
