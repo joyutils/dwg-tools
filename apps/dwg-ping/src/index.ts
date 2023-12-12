@@ -7,7 +7,6 @@ import { getOperatorsDataQueryDocument } from "./query.js";
 import { GetDistributorOperatorsQuery } from "./gql/graphql.js";
 import {
   DistributionOperatorStatus,
-  ExtendedBenchmarkResult,
   OperatorAvailabilityResult,
   SampleAssetTestResult,
 } from "./types.js";
@@ -18,10 +17,6 @@ import {
   TEST_INTERVAL_MIN,
 } from "./config.js";
 import { runBenchmark } from "./benchmark.js";
-import { gatherTestObjects } from "./testData.js";
-import { formatMbps, formatMs } from "./until.js";
-import { performSpeedTest } from "./speedtest.js";
-
 
 const packageJson = JSON.parse(
   await fs.readFile(new URL("../package.json", import.meta.url), "utf-8")
@@ -32,10 +27,10 @@ const TEST_ASSET_ID = "1343";
 const ResultTime = 1;
 const TESTS_COUNT = 1;
 const chunkSize = 5 * 1e6;
-const uid = "3ee2cf1d-e10c-421a-9b07-6dcfb4bdd5d4"
+const decodeVideoId = "552149"  // video id  is "270397"
 const esClient = await ElasticClient.initFromEnv();
 
-async function sendResults(results: OperatorAvailabilityResult[] | ExtendedBenchmarkResult[]) {
+async function sendResults(results: OperatorAvailabilityResult[]) {
   const body = results.flatMap((result) => [
     { index: { _index: "distributors-status" } },
     result,
@@ -66,47 +61,24 @@ async function runTest() {
 
     await sendResults(resultsWithDegradations);
 
-    const videoResults: ExtendedBenchmarkResult[] = [];
-
     console.log(JSON.stringify(resultsWithDegradations, null, 2));
+
+    let resultWithVideoSpeed: OperatorAvailabilityResult[] = [];
 
     videoTestCount++;
 
-    // if (videoTestCount === ResultTime) {
+    if (videoTestCount === ResultTime) {
+      for (const testObject of resultsWithDegradations) {
+        const videoResult = await runBenchmark(`${testObject.nodeEndpoint}api/v1/assets/${decodeVideoId}`, chunkSize, TESTS_COUNT);
+        testObject.videoSpeed = videoResult;
+        resultWithVideoSpeed.push(testObject);
 
-    //   // const testObjects = await gatherTestObjects("270397");
+      }
 
-    //   const { referenceDownloadSpeedBps, referenceLatency } = await performSpeedTest();
+      await sendResults(resultWithVideoSpeed);
 
-    //   for (const url of testObjects.urls) {
-    //     const videoResult = await runBenchmark(url, chunkSize, TESTS_COUNT);
-    //     const extendedResult: ExtendedBenchmarkResult = {
-    //       ...videoResult,
-    //       objectType: testObjects.type,
-    //       uid,
-    //       referenceDownloadSpeedBps,
-    //       referenceLatency,
-    //       version: "0.2.0",
-    //     };
-    //     if (videoResult.status === "success") {
-    //       console.log(
-    //         url,
-    //         formatMbps(videoResult.downloadSpeedBps),
-    //         formatMs(videoResult.ttfb)
-    //       );
-    //     } else {
-    //       console.log(extendedResult);
-    //     }
-
-    //     videoResults.push(extendedResult);
-    //   }
-
-
-    //   await sendResults(videoResults);
-
-    //   console.log(videoResults)
-    //   videoTestCount = 0;
-    // }
+      videoTestCount = 0;
+    }
 
   } catch (e) {
     console.error("Test failed");
