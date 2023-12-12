@@ -1,3 +1,4 @@
+import { BenchmarkResult } from "./benchmark.js";
 import { GetDistributorOperatorsQuery } from "./gql/graphql.js";
 
 export type Operator =
@@ -12,7 +13,7 @@ export type OperatorAvailabilityResult = {
   distributingStatus: "distributing" | "not-distributing";
   source: string;
   version: string;
-  videoSpeed?: VideoDownloadSpeedStatus
+  videoSpeed?: BenchmarkResult
 } & (
     | {
       pingStatus: "ok" | "asset-download-failed";
@@ -56,17 +57,3 @@ export type SampleAssetTestResult = {
   statusCode?: number;
   responseTimeMs?: number;
 };
-
-export type VideoDownloadSpeedStatus = {
-  status?: string,
-  ttfb?: number,
-  totalRequestTime?: number,
-  downloadTime?: number,
-  downloadSize?: number,
-  downloadSpeedBps?: number,
-  dnsLookupTime?: number,
-  sslTime?: number,
-  processingTime?: number,
-  url?: string,
-  cacheStatus?: string
-}
