@@ -32,7 +32,6 @@ export type OperatorAvailabilityResult = {
       refBlocksProcessed: number;
     }
     | { pingStatus: "dead"; error: string }
-
   );
 
 export type DistributionOperatorQueryNodeStatus = {
