@@ -6,9 +6,9 @@ import { ElasticClient } from "@joyutils/dwg-utils";
 import { getOperatorsDataQueryDocument } from "./query.js";
 import { GetDistributorOperatorsQuery } from "./gql/graphql.js";
 import {
+  AssetType,
   DistributionOperatorStatus,
-  OperatorAvailabilityResult,
-  SampleAssetTestResult,
+  OperatorPingResult,
 } from "./types.js";
 import {
   GRAPHQL_URL,
@@ -16,21 +16,27 @@ import {
   SOURCE_ID,
   TEST_INTERVAL_MIN,
 } from "./config.js";
-import { runBenchmark } from "./benchmark.js";
+import { runAssetBenchmark } from "@joyutils/dwg-utils";
 
 const packageJson = JSON.parse(
-  await fs.readFile(new URL("../package.json", import.meta.url), "utf-8")
+  await fs.readFile(new URL("../package.json", import.meta.url), "utf-8"),
 );
 const packageVersion = packageJson.version;
 const userAgent = `dwg-ping/${packageVersion}`;
-const TEST_ASSET_ID = "1343";
-const ResultTime = 1;
-const TESTS_COUNT = 1;
-const chunkSize = 5 * 1e6;
-const decodeVideoId = "552149"  // video id  is "270397"
+
+const MEDIA_DOWNLOAD_SIZE = 5 * 1e6; // 5MB
+const THUMBNAIL_TEST_OBJECT_ID = "1343";
+const MEDIA_TEST_OBJECT_ID = "552149";
+const TEST_OBJECT_TYPE: AssetType =
+  new Date().getMinutes() < 10 ? "media" : "thumbnail";
+const TEST_OBJECT_ID =
+  TEST_OBJECT_TYPE === "media"
+    ? MEDIA_TEST_OBJECT_ID
+    : THUMBNAIL_TEST_OBJECT_ID;
+
 const esClient = await ElasticClient.initFromEnv();
 
-async function sendResults(results: OperatorAvailabilityResult[]) {
+async function sendResults(results: OperatorPingResult[]) {
   const body = results.flatMap((result) => [
     { index: { _index: "distributors-status" } },
     result,
@@ -44,17 +50,19 @@ async function sendResults(results: OperatorAvailabilityResult[]) {
   }
 }
 
-let videoTestCount = 0;
-
 async function runTest() {
   console.log(`Running test at ${new Date()}`);
 
-  try {
+  // sleep between 0 and 100 seconds
+  const sleepTime = Math.random() * 100000;
+  console.log(`Sleeping for ${sleepTime / 1000} seconds`);
+  await new Promise((resolve) => setTimeout(resolve, sleepTime));
 
+  try {
     const operators = await getDistributionOperators();
 
     const results = await Promise.all(
-      operators.map((operator) => getOperatorStatus(operator))
+      operators.map((operator) => getOperatorStatus(operator)),
     );
 
     const resultsWithDegradations = await findOperatorDegradations(results);
@@ -62,24 +70,6 @@ async function runTest() {
     await sendResults(resultsWithDegradations);
 
     console.log(JSON.stringify(resultsWithDegradations, null, 2));
-
-    let resultWithVideoSpeed: OperatorAvailabilityResult[] = [];
-
-    videoTestCount++;
-
-    if (videoTestCount === ResultTime) {
-      for (const testObject of resultsWithDegradations) {
-        const videoResult = await runBenchmark(`${testObject.nodeEndpoint}api/v1/assets/${decodeVideoId}`, chunkSize, TESTS_COUNT);
-        testObject.videoSpeed = videoResult;
-        resultWithVideoSpeed.push(testObject);
-
-      }
-
-      await sendResults(resultWithVideoSpeed);
-
-      videoTestCount = 0;
-    }
-
   } catch (e) {
     console.error("Test failed");
     console.error(e);
@@ -87,13 +77,12 @@ async function runTest() {
 }
 
 async function getOperatorStatus(
-  operator: GetDistributorOperatorsQuery["distributionBucketOperators"][0]
-): Promise<OperatorAvailabilityResult> {
-
-  const distributingStatus: OperatorAvailabilityResult["distributingStatus"] =
-    operator.distributionBucket.distributing
-      ? "distributing"
-      : "not-distributing";
+  operator: GetDistributorOperatorsQuery["distributionBucketOperators"][0],
+): Promise<OperatorPingResult> {
+  const distributingStatus: OperatorPingResult["distributingStatus"] = operator
+    .distributionBucket.distributing
+    ? "distributing"
+    : "not-distributing";
   const commonFields = {
     time: new Date(),
     source: SOURCE_ID,
@@ -110,7 +99,7 @@ async function getOperatorStatus(
     return { ...commonFields, pingStatus: "dead", error: "No node endpoint" };
   }
   const nodeStatus = await getDistributionOpearatorStatus(
-    operator?.metadata?.nodeEndpoint
+    operator?.metadata?.nodeEndpoint,
   );
   if (!nodeStatus) {
     return {
@@ -120,23 +109,25 @@ async function getOperatorStatus(
     };
   }
 
-  const sampleAssetResult = await getSampleAssetFromDistributor(
-    operator?.metadata?.nodeEndpoint
+  const sampleAssetResult = await runAssetBenchmark(
+    `${operator?.metadata?.nodeEndpoint}api/v1/assets/${TEST_OBJECT_ID}`,
+    MEDIA_DOWNLOAD_SIZE,
   );
 
   return {
     ...commonFields,
-    pingStatus: sampleAssetResult.ok ? "ok" : "asset-download-failed",
-    assetDownloadStatusCode: sampleAssetResult.statusCode,
-    assetDownloadResponseTimeMs: sampleAssetResult.responseTimeMs,
+    pingStatus:
+      sampleAssetResult.status === "success" ? "ok" : "asset-download-failed",
+    assetDownloadResult: sampleAssetResult,
+    assetDownloadType: TEST_OBJECT_TYPE,
     nodeStatus,
     opereatorMetadata: operator.metadata,
   };
 }
 
 async function findOperatorDegradations(
-  operatorsResults: OperatorAvailabilityResult[]
-): Promise<OperatorAvailabilityResult[]> {
+  operatorsResults: OperatorPingResult[],
+): Promise<OperatorPingResult[]> {
   const getMedian = (values: number[]) => {
     const sorted = values.sort((a, b) => a - b);
     const middle = Math.floor(sorted.length / 2);
@@ -148,13 +139,13 @@ async function findOperatorDegradations(
       .filter(
         (result) =>
           result.pingStatus === "ok" &&
-          result.distributingStatus === "distributing"
+          result.distributingStatus === "distributing",
       )
       .map(
         (result) =>
           ((result as any).nodeStatus as DistributionOperatorStatus)
-            .queryNodeStatus.blocksProcessed
-      )
+            .queryNodeStatus.blocksProcessed,
+      ),
   );
 
   const medianChainHead = getMedian(
@@ -162,13 +153,13 @@ async function findOperatorDegradations(
       .filter(
         (result) =>
           result.pingStatus === "ok" &&
-          result.distributingStatus === "distributing"
+          result.distributingStatus === "distributing",
       )
       .map(
         (result) =>
           ((result as any).nodeStatus as DistributionOperatorStatus)
-            .queryNodeStatus.chainHead
-      )
+            .queryNodeStatus.chainHead,
+      ),
   );
 
   return operatorsResults.map((result) => {
@@ -177,7 +168,7 @@ async function findOperatorDegradations(
     }
     const qnStatus = result.nodeStatus.queryNodeStatus;
     const blocksProcessedDiff = Math.abs(
-      qnStatus.blocksProcessed - medianBlocksProcessed
+      qnStatus.blocksProcessed - medianBlocksProcessed,
     );
     const chainHeadDiff = Math.abs(qnStatus.chainHead - medianChainHead);
     const THRESHOLD = 10;
@@ -210,7 +201,7 @@ async function getDistributionOperators() {
 }
 
 async function getDistributionOpearatorStatus(
-  nodeEndpoint: string
+  nodeEndpoint: string,
 ): Promise<DistributionOperatorStatus | null> {
   try {
     const response = await fetch(`${nodeEndpoint}api/v1/status`, {
@@ -220,7 +211,7 @@ async function getDistributionOpearatorStatus(
     });
     if (response.status !== 200) {
       console.error(
-        `Failed to fetch status from ${nodeEndpoint}, status code: ${response.status}`
+        `Failed to fetch status from ${nodeEndpoint}, status code: ${response.status}`,
       );
       return null;
     }
@@ -233,45 +224,11 @@ async function getDistributionOpearatorStatus(
   }
 }
 
-async function getSampleAssetFromDistributor(
-  nodeEndpoint: string
-): Promise<SampleAssetTestResult> {
-  try {
-    const startTime = performance.now();
-    const response = await fetch(
-      `${nodeEndpoint}api/v1/assets/${TEST_ASSET_ID}`,
-      {
-        headers: {
-          "User-Agent": userAgent,
-        },
-      }
-    );
-    await response.blob(); // get the fully body
-    const endTime = performance.now();
-    const responseTimeMs = endTime - startTime;
-    if (response.status !== 200) {
-      return {
-        ok: false,
-        statusCode: response.status,
-        responseTimeMs,
-      };
-    }
-    return {
-      ok: true,
-      responseTimeMs,
-    };
-  } catch (error) {
-    return {
-      ok: false,
-    };
-  }
-}
-
 console.log(`Starting dwg-ping v${packageVersion}`);
 if (!SINGLE_RUN) {
   new CronJob(`0 */${TEST_INTERVAL_MIN} * * * *`, runTest, null, true);
   console.log(
-    `Started cron job to run the test every ${TEST_INTERVAL_MIN} minutes`
+    `Started cron job to run the test every ${TEST_INTERVAL_MIN} minutes`,
   );
 } else {
   await runTest();

@@ -1,9 +1,12 @@
-import { BenchmarkResult } from "./benchmark.js";
+import { BenchmarkResult } from "@joyutils/dwg-utils";
 import { GetDistributorOperatorsQuery } from "./gql/graphql.js";
 
-export type Operator =
-  GetDistributorOperatorsQuery["distributionBucketOperators"][number];
-export type OperatorAvailabilityResult = {
+export type OperatorMetadata =
+  GetDistributorOperatorsQuery["distributionBucketOperators"][number]["metadata"];
+
+export type AssetType = "thumbnail" | "media";
+
+export type OperatorPingResult = {
   time: Date;
   operatorId: string;
   distributionBucketId: string;
@@ -13,26 +16,27 @@ export type OperatorAvailabilityResult = {
   distributingStatus: "distributing" | "not-distributing";
   source: string;
   version: string;
-  videoSpeed?: BenchmarkResult
 } & (
-    | {
+  | {
       pingStatus: "ok" | "asset-download-failed";
-      assetDownloadStatusCode?: number;
-      assetDownloadResponseTimeMs?: number;
+      assetDownloadType: AssetType;
+      assetDownloadResult: BenchmarkResult;
       nodeStatus: DistributionOperatorStatus;
-      opereatorMetadata: Operator["metadata"];
+      opereatorMetadata: OperatorMetadata;
       chainHeadDiff?: number;
       blocksProcessedDiff?: number;
     }
-    | {
+  | {
       pingStatus: "degraded";
+      assetDownloadType: AssetType;
+      assetDownloadResult: BenchmarkResult;
       nodeStatus: DistributionOperatorStatus;
-      opereatorMetadata: Operator["metadata"];
+      opereatorMetadata: OperatorMetadata;
       refChainHead: number;
       refBlocksProcessed: number;
     }
-    | { pingStatus: "dead"; error: string }
-  );
+  | { pingStatus: "dead"; error: string }
+);
 
 export type DistributionOperatorQueryNodeStatus = {
   url: string;

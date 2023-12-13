@@ -1,6 +1,4 @@
-import dotenv from "dotenv";
-
-dotenv.config();
+import "dotenv/config";
 
 export const getRequiredEnv = (name: string): string => {
   const value = process.env[name];
@@ -12,7 +10,7 @@ export const getRequiredEnv = (name: string): string => {
 
 export const getEnv = <T = undefined>(
   name: string,
-  defaultValue: T
+  defaultValue: T,
 ): string | T => {
   const value = process.env[name];
   return value ?? defaultValue;
