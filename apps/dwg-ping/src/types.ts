@@ -1,3 +1,4 @@
+import { BenchmarkResult } from "./benchmark.js";
 import { GetDistributorOperatorsQuery } from "./gql/graphql.js";
 
 export type Operator =
@@ -12,8 +13,9 @@ export type OperatorAvailabilityResult = {
   distributingStatus: "distributing" | "not-distributing";
   source: string;
   version: string;
+  videoSpeed?: BenchmarkResult
 } & (
-  | {
+    | {
       pingStatus: "ok" | "asset-download-failed";
       assetDownloadStatusCode?: number;
       assetDownloadResponseTimeMs?: number;
@@ -22,15 +24,15 @@ export type OperatorAvailabilityResult = {
       chainHeadDiff?: number;
       blocksProcessedDiff?: number;
     }
-  | {
+    | {
       pingStatus: "degraded";
       nodeStatus: DistributionOperatorStatus;
       opereatorMetadata: Operator["metadata"];
       refChainHead: number;
       refBlocksProcessed: number;
     }
-  | { pingStatus: "dead"; error: string }
-);
+    | { pingStatus: "dead"; error: string }
+  );
 
 export type DistributionOperatorQueryNodeStatus = {
   url: string;

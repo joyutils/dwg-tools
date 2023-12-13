@@ -16,6 +16,7 @@ import {
   SOURCE_ID,
   TEST_INTERVAL_MIN,
 } from "./config.js";
+import { runBenchmark } from "./benchmark.js";
 
 const packageJson = JSON.parse(
   await fs.readFile(new URL("../package.json", import.meta.url), "utf-8")
@@ -23,7 +24,10 @@ const packageJson = JSON.parse(
 const packageVersion = packageJson.version;
 const userAgent = `dwg-ping/${packageVersion}`;
 const TEST_ASSET_ID = "1343";
-
+const ResultTime = 1;
+const TESTS_COUNT = 1;
+const chunkSize = 5 * 1e6;
+const decodeVideoId = "552149"  // video id  is "270397"
 const esClient = await ElasticClient.initFromEnv();
 
 async function sendResults(results: OperatorAvailabilityResult[]) {
@@ -40,18 +44,42 @@ async function sendResults(results: OperatorAvailabilityResult[]) {
   }
 }
 
+let videoTestCount = 0;
+
 async function runTest() {
   console.log(`Running test at ${new Date()}`);
+
   try {
+
     const operators = await getDistributionOperators();
+
     const results = await Promise.all(
       operators.map((operator) => getOperatorStatus(operator))
     );
+
     const resultsWithDegradations = await findOperatorDegradations(results);
 
     await sendResults(resultsWithDegradations);
 
     console.log(JSON.stringify(resultsWithDegradations, null, 2));
+
+    let resultWithVideoSpeed: OperatorAvailabilityResult[] = [];
+
+    videoTestCount++;
+
+    if (videoTestCount === ResultTime) {
+      for (const testObject of resultsWithDegradations) {
+        const videoResult = await runBenchmark(`${testObject.nodeEndpoint}api/v1/assets/${decodeVideoId}`, chunkSize, TESTS_COUNT);
+        testObject.videoSpeed = videoResult;
+        resultWithVideoSpeed.push(testObject);
+
+      }
+
+      await sendResults(resultWithVideoSpeed);
+
+      videoTestCount = 0;
+    }
+
   } catch (e) {
     console.error("Test failed");
     console.error(e);
@@ -61,6 +89,7 @@ async function runTest() {
 async function getOperatorStatus(
   operator: GetDistributorOperatorsQuery["distributionBucketOperators"][0]
 ): Promise<OperatorAvailabilityResult> {
+
   const distributingStatus: OperatorAvailabilityResult["distributingStatus"] =
     operator.distributionBucket.distributing
       ? "distributing"
