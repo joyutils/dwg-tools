@@ -48,6 +48,7 @@ export async function runAssetBenchmark(
   url: string,
   maxDownloadSize: number,
   numRuns = 1,
+  debug = false,
 ): Promise<BenchmarkResult> {
   if (numRuns < 1) {
     throw new Error("numRuns must be at least 1");
@@ -57,7 +58,7 @@ export async function runAssetBenchmark(
   for (let i = 0; i < numRuns; i++) {
     try {
       const result = await withTimeout(
-        runSingleBenchmark(url, maxDownloadSize, TOTAL_REQUEST_TIMEOUT),
+        runSingleBenchmark(url, maxDownloadSize, TOTAL_REQUEST_TIMEOUT, debug),
         TOTAL_REQUEST_TIMEOUT + 2000,
       );
       results.push(result);
@@ -77,6 +78,7 @@ async function runSingleBenchmark(
   url: string,
   maxDownloadSize: number,
   maxTime: number,
+  debug = false,
 ): Promise<BenchmarkResult> {
   try {
     const controller = new AbortController();
@@ -104,7 +106,6 @@ async function runSingleBenchmark(
       };
     }
 
-    const startReadTime = performance.now();
     let receivedSize = 0;
     const reader = response.body?.getReader();
     if (!reader) {
@@ -120,42 +121,29 @@ async function runSingleBenchmark(
         break;
       }
       receivedSize += value?.byteLength ?? 0;
-      if (performance.now() - startReadTime > maxTime) {
+      if (performance.now() - responseStartTime > maxTime) {
         reader.cancel();
         controller.abort();
         break;
       }
     }
     const endFetchTime = performance.now();
-    const readTime = endFetchTime - startReadTime;
+    const readTime = endFetchTime - responseStartTime;
 
-    let ttfb, totalRequestTime, downloadTime: number;
-    let dnsLookupTime, sslTime, processingTime: number | undefined;
+    let ttfb = responseStartTime - startFetchTime;
+    let totalRequestTime = endFetchTime - startFetchTime;
+    let downloadTime = readTime;
 
-    const performanceEntry = performance?.getEntriesByName?.(
-      url,
-    )?.[0] as PerformanceResourceTiming; // TODO: check type
-    if (performanceEntry) {
-      const {
-        fetchStart,
-        domainLookupStart,
-        domainLookupEnd,
-        secureConnectionStart,
-        connectEnd,
-        responseStart,
-        responseEnd,
-        duration,
-      } = performanceEntry;
-      ttfb = responseStart - fetchStart;
-      totalRequestTime = duration;
-      downloadTime = responseEnd - responseStart;
-      dnsLookupTime = domainLookupEnd - domainLookupStart;
-      sslTime = connectEnd - secureConnectionStart;
-      processingTime = responseStart - connectEnd;
-    } else {
-      ttfb = responseStartTime - startFetchTime;
-      totalRequestTime = endFetchTime - startFetchTime;
-      downloadTime = readTime;
+    if (debug) {
+      console.log({
+        startFetchTime,
+        responseStartTime,
+        endFetchTime,
+        readTime,
+        ttfb,
+        totalRequestTime,
+        downloadTime,
+      });
     }
 
     if (ttfb < 0) {
@@ -197,9 +185,6 @@ async function runSingleBenchmark(
       downloadTime,
       downloadSpeedBps,
       downloadSize: receivedSize,
-      dnsLookupTime,
-      sslTime,
-      processingTime,
       url: url,
       cacheStatus: response.headers.get("X-Cache") || "unknown",
     };

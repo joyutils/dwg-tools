@@ -11,6 +11,7 @@ import {
   OperatorPingResult,
 } from "./types.js";
 import {
+  DEBUG,
   GRAPHQL_URL,
   SINGLE_RUN,
   SOURCE_ID,
@@ -53,10 +54,11 @@ async function sendResults(results: OperatorPingResult[]) {
 async function runTest() {
   console.log(`Running test at ${new Date()}`);
 
-  // sleep between 0 and 100 seconds
-  const sleepTime = Math.random() * 100000;
-  console.log(`Sleeping for ${sleepTime / 1000} seconds`);
-  await new Promise((resolve) => setTimeout(resolve, sleepTime));
+  if (!DEBUG) {
+    const sleepTime = Math.random() * 100000;
+    console.log(`Sleeping for ${sleepTime / 1000} seconds`);
+    await new Promise((resolve) => setTimeout(resolve, sleepTime));
+  }
 
   try {
     const operators = await getDistributionOperators();
@@ -69,7 +71,7 @@ async function runTest() {
 
     await sendResults(resultsWithDegradations);
 
-    console.log(JSON.stringify(resultsWithDegradations, null, 2));
+    console.log(resultsWithDegradations);
   } catch (e) {
     console.error("Test failed");
     console.error(e);
@@ -112,6 +114,8 @@ async function getOperatorStatus(
   const sampleAssetResult = await runAssetBenchmark(
     `${operator?.metadata?.nodeEndpoint}api/v1/assets/${TEST_OBJECT_ID}`,
     MEDIA_DOWNLOAD_SIZE,
+    1,
+    DEBUG,
   );
 
   return {
