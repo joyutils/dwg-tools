@@ -28,12 +28,13 @@ const userAgent = `dwg-ping/${packageVersion}`;
 const MEDIA_DOWNLOAD_SIZE = 5 * 1e6; // 5MB
 const THUMBNAIL_TEST_OBJECT_ID = "1343";
 const MEDIA_TEST_OBJECT_ID = "552149";
-const TEST_OBJECT_TYPE: AssetType =
-  new Date().getMinutes() < 10 ? "media" : "thumbnail";
-const TEST_OBJECT_ID =
-  TEST_OBJECT_TYPE === "media"
-    ? MEDIA_TEST_OBJECT_ID
-    : THUMBNAIL_TEST_OBJECT_ID;
+
+function getTestObjectId(): [AssetType, string] {
+  const assetType = new Date().getMinutes() < 2 ? "media" : "thumbnail";
+  const testObjectId =
+    assetType === "media" ? MEDIA_TEST_OBJECT_ID : THUMBNAIL_TEST_OBJECT_ID;
+  return [assetType, testObjectId];
+}
 
 const esClient = await ElasticClient.initFromEnv();
 
@@ -111,8 +112,10 @@ async function getOperatorStatus(
     };
   }
 
+  const [assetDownloadType, testAssetId] = getTestObjectId();
+
   const sampleAssetResult = await runAssetBenchmark(
-    `${operator?.metadata?.nodeEndpoint}api/v1/assets/${TEST_OBJECT_ID}`,
+    `${operator?.metadata?.nodeEndpoint}api/v1/assets/${testAssetId}`,
     MEDIA_DOWNLOAD_SIZE,
     1,
     DEBUG,
@@ -123,7 +126,7 @@ async function getOperatorStatus(
     pingStatus:
       sampleAssetResult.status === "success" ? "ok" : "asset-download-failed",
     assetDownloadResult: sampleAssetResult,
-    assetDownloadType: TEST_OBJECT_TYPE,
+    assetDownloadType,
     nodeStatus,
     opereatorMetadata: operator.metadata,
   };
@@ -229,11 +232,10 @@ async function getDistributionOpearatorStatus(
 }
 
 console.log(`Starting dwg-ping v${packageVersion}`);
+await runTest();
 if (!SINGLE_RUN) {
   new CronJob(`0 */${TEST_INTERVAL_MIN} * * * *`, runTest, null, true);
   console.log(
     `Started cron job to run the test every ${TEST_INTERVAL_MIN} minutes`,
   );
-} else {
-  await runTest();
 }
