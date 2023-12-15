@@ -30,7 +30,7 @@ const THUMBNAIL_TEST_OBJECT_ID = "1343";
 const MEDIA_TEST_OBJECT_ID = "552149";
 
 function getTestObjectId(): [AssetType, string] {
-  const assetType = new Date().getMinutes() < 20 ? "media" : "thumbnail";
+  const assetType = new Date().getMinutes() < 10 ? "media" : "thumbnail";
   const testObjectId =
     assetType === "media" ? MEDIA_TEST_OBJECT_ID : THUMBNAIL_TEST_OBJECT_ID;
   return [assetType, testObjectId];
