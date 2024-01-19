@@ -158,12 +158,12 @@ async function runSingleBenchmark(
       downloadTime = readTime;
     }
 
-    if (totalRequestTime < 20) {
+    if (totalRequestTime < 5) {
       // too good to be true
       return {
         status: "error",
         url,
-        error: "request time below 20ms",
+        error: "request time below 5ms",
       };
     }
 
