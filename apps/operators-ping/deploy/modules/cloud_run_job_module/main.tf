@@ -21,13 +21,13 @@ variable "elastic_password" {
 resource "google_cloud_run_v2_job" "default" {
   provider = google-beta
   project  = "joyutils"
-  name     = "dwg-ping-job-${var.region}"
+  name     = "operators-ping-job-${var.region}"
   location = var.region
 
   template {
     template {
       containers {
-        image = "europe-central2-docker.pkg.dev/joyutils/dwg/dwg-ping:0.5.0"
+        image = "europe-central2-docker.pkg.dev/joyutils/dwg/operators-ping:1.0.1"
 
         env {
           name  = "ELASTICSEARCH_URL"
@@ -48,6 +48,14 @@ resource "google_cloud_run_v2_job" "default" {
         env {
           name  = "SINGLE_RUN"
           value = "true"
+        }
+        env {
+          name  = "STORAGE_THUMBNAIL_TEST_OBJECT_ID_MAPPING"
+          value = "1717519:0,1,2,3,7,14,18;1717714:4,8,10,11,12"
+        }
+        env {
+          name  = "STORAGE_MEDIA_TEST_OBJECT_ID_MAPPING"
+          value = "1717518:0,1,2,3,7,14,18;1717713:4,8,10,11,12"
         }
       }
     }

@@ -1,6 +1,6 @@
 {
-  "name": "@joyutils/dwg-ping",
-  "version": "0.5.1",
+  "name": "@joyutils/operators-ping",
+  "version": "1.0.1",
   "description": "Monitor Joystream Operators",
   "license": "ISC",
   "type": "module",

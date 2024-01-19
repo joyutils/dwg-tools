@@ -6,24 +6,18 @@ services:
       context: .
       dockerfile: apps/dwg-alerter/Dockerfile
     container_name: dwg-alerter
+    env_file: .env
     environment:
-      - ELASTICSEARCH_URL=${ELASTICSEARCH_URL}
-      - ELASTICSEARCH_USERNAME=${ELASTICSEARCH_USERNAME}
-      - ELASTICSEARCH_PASSWORD=${ELASTICSEARCH_PASSWORD}
-      - DISCORD_WEBHOOK_URL=${DISCORD_WEBHOOK_URL}
       - ALERTS_FILE_PATH=/data/alerts.json
     volumes:
       - alerter-data:/data
-  dwg-ping:
+  operators-ping:
     build:
       context: .
-      dockerfile: apps/dwg-ping/Dockerfile
-    container_name: dwg-ping
+      dockerfile: apps/operators-ping/Dockerfile
+    container_name: operators-ping
+    env_file: .env
     environment:
-      - ELASTICSEARCH_URL=${ELASTICSEARCH_URL}
-      - ELASTICSEARCH_USERNAME=${ELASTICSEARCH_USERNAME}
-      - ELASTICSEARCH_PASSWORD=${ELASTICSEARCH_PASSWORD}
-      - SOURCE_ID=${SOURCE_ID}
       - TEST_INTERVAL_MIN=5
 
 volumes:

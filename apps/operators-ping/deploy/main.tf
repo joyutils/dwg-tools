@@ -23,8 +23,8 @@ module "cloud_run_job" {
   source   = "./modules/cloud_run_job_module"
   for_each = toset(var.regions)
 
-  region = each.value
-  elastic_url = var.elastic_url
+  region           = each.value
+  elastic_url      = var.elastic_url
   elastic_username = var.elastic_username
   elastic_password = var.elastic_password
 }

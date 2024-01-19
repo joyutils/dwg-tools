@@ -2,69 +2,41 @@ import { request as graphqlRequest } from "graphql-request";
 import { fetch } from "undici";
 import { CronJob } from "cron";
 import fs from "node:fs/promises";
-import { ElasticClient } from "@joyutils/dwg-utils";
+import { ElasticClient, runAssetBenchmark } from "@joyutils/dwg-utils";
 import {
   getDistributionOperatorsQueryDocument,
   getStorageOperatorsQueryDocument,
 } from "./query.js";
 import {
-  AssetType,
   DistributionOperatorNodeStatus,
   DistributionOperatorPingResult,
   OperatorNodeStatus,
   OperatorPingResult,
-  OperatorType,
   RawOperatorData,
   StorageOperatorNodeStatus,
   StorageOperatorPingResult,
 } from "./types.js";
 import {
   DEBUG,
+  getTestObjectId,
   GRAPHQL_URL,
+  MEDIA_DOWNLOAD_SIZE,
   SINGLE_RUN,
   SOURCE_ID,
   TEST_INTERVAL_MIN,
 } from "./config.js";
-import { runAssetBenchmark } from "@joyutils/dwg-utils";
 
 const packageJson = JSON.parse(
   await fs.readFile(new URL("../package.json", import.meta.url), "utf-8"),
 );
 const packageVersion = packageJson.version;
-const userAgent = `dwg-ping/${packageVersion}`;
-
-const MEDIA_DOWNLOAD_SIZE = 5 * 1e6; // 5MB
-const DISTRIBUTOR_THUMBNAIL_TEST_OBJECT_ID = "1343";
-const DISTRIBUTOR_MEDIA_TEST_OBJECT_ID = "552149";
-const STORAGE_THUMBNAIL_TEST_OBJECT_ID = "273094";
-const STORAGE_MEDIA_TEST_OBJECT_ID = "273093";
-
-function getTestObjectId(operatorType: OperatorType): [AssetType, string] {
-  const assetType = new Date().getMinutes() < 10 ? "media" : "thumbnail";
-
-  let testObjectId: string;
-  if (operatorType === "distribution") {
-    if (assetType === "media") {
-      testObjectId = DISTRIBUTOR_MEDIA_TEST_OBJECT_ID;
-    } else {
-      testObjectId = DISTRIBUTOR_THUMBNAIL_TEST_OBJECT_ID;
-    }
-  } else {
-    if (assetType === "media") {
-      testObjectId = STORAGE_MEDIA_TEST_OBJECT_ID;
-    } else {
-      testObjectId = STORAGE_THUMBNAIL_TEST_OBJECT_ID;
-    }
-  }
-
-  return [assetType, testObjectId];
-}
+const userAgent = `operators-ping/${packageVersion}`;
 
 const esClient = await ElasticClient.initFromEnv();
 
 async function sendResults(results: OperatorPingResult[]) {
   const body = results.flatMap((result) => [
-    { index: { _index: "distributors-status" } },
+    { index: { _index: "operators-ping" } },
     result,
   ]);
   try {
@@ -92,9 +64,11 @@ async function runTest() {
     ]);
     const operators = [...distributionOperators, ...storageOperators];
 
-    const results = await Promise.all(
-      operators.map((operator) => getOperatorStatus(operator)),
-    );
+    const results: OperatorPingResult[] = [];
+    for (const operator of operators) {
+      const result = await getOperatorStatus(operator);
+      results.push(result);
+    }
 
     const resultsWithDegradations = await findOperatorDegradations(results);
 
@@ -171,6 +145,7 @@ async function getOperatorStatus(
 
   const [assetDownloadType, testAssetId] = getTestObjectId(
     pingResult.operatorType,
+    pingResult.bucketId,
   );
 
   const assetUrl =
@@ -300,7 +275,7 @@ async function getOperatorNodeStatus(
   }
 }
 
-console.log(`Starting dwg-ping v${packageVersion}`);
+console.log(`Starting operators-ping v${packageVersion}`);
 await runTest();
 if (!SINGLE_RUN) {
   new CronJob(`0 */${TEST_INTERVAL_MIN} * * * *`, runTest, null, true);
