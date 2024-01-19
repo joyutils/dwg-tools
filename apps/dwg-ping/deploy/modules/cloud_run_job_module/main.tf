@@ -59,13 +59,13 @@ resource "google_cloud_scheduler_job" "scheduler" {
   provider    = google-beta
   name        = "scheduler-${google_cloud_run_v2_job.default.name}"
   description = "Scheduler for Cloud Run Job"
-  region      = var.region
+  region      = "europe-west1"
   schedule    = "*/10 * * * *"
   project     = "joyutils"
 
   http_target {
     http_method = "POST"
-    uri         = "https://${google_cloud_run_v2_job.default.location}-run.googleapis.com/apis/run.googleapis.com/v1/namespaces/joyutils/jobs/${google_cloud_run_v2_job.default.name}:run"
+    uri         = "https://${var.region}-run.googleapis.com/apis/run.googleapis.com/v1/namespaces/joyutils/jobs/${google_cloud_run_v2_job.default.name}:run"
 
     oauth_token {
       service_account_email = "1095089208019-compute@developer.gserviceaccount.com"

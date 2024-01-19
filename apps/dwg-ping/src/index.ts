@@ -3,12 +3,20 @@ import { fetch } from "undici";
 import { CronJob } from "cron";
 import fs from "node:fs/promises";
 import { ElasticClient } from "@joyutils/dwg-utils";
-import { getOperatorsDataQueryDocument } from "./query.js";
-import { GetDistributorOperatorsQuery } from "./gql/graphql.js";
+import {
+  getDistributionOperatorsQueryDocument,
+  getStorageOperatorsQueryDocument,
+} from "./query.js";
 import {
   AssetType,
-  DistributionOperatorStatus,
+  DistributionOperatorNodeStatus,
+  DistributionOperatorPingResult,
+  OperatorNodeStatus,
   OperatorPingResult,
+  OperatorType,
+  RawOperatorData,
+  StorageOperatorNodeStatus,
+  StorageOperatorPingResult,
 } from "./types.js";
 import {
   DEBUG,
@@ -26,13 +34,29 @@ const packageVersion = packageJson.version;
 const userAgent = `dwg-ping/${packageVersion}`;
 
 const MEDIA_DOWNLOAD_SIZE = 5 * 1e6; // 5MB
-const THUMBNAIL_TEST_OBJECT_ID = "1343";
-const MEDIA_TEST_OBJECT_ID = "552149";
+const DISTRIBUTOR_THUMBNAIL_TEST_OBJECT_ID = "1343";
+const DISTRIBUTOR_MEDIA_TEST_OBJECT_ID = "552149";
+const STORAGE_THUMBNAIL_TEST_OBJECT_ID = "273094";
+const STORAGE_MEDIA_TEST_OBJECT_ID = "273093";
 
-function getTestObjectId(): [AssetType, string] {
+function getTestObjectId(operatorType: OperatorType): [AssetType, string] {
   const assetType = new Date().getMinutes() < 10 ? "media" : "thumbnail";
-  const testObjectId =
-    assetType === "media" ? MEDIA_TEST_OBJECT_ID : THUMBNAIL_TEST_OBJECT_ID;
+
+  let testObjectId: string;
+  if (operatorType === "distribution") {
+    if (assetType === "media") {
+      testObjectId = DISTRIBUTOR_MEDIA_TEST_OBJECT_ID;
+    } else {
+      testObjectId = DISTRIBUTOR_THUMBNAIL_TEST_OBJECT_ID;
+    }
+  } else {
+    if (assetType === "media") {
+      testObjectId = STORAGE_MEDIA_TEST_OBJECT_ID;
+    } else {
+      testObjectId = STORAGE_THUMBNAIL_TEST_OBJECT_ID;
+    }
+  }
+
   return [assetType, testObjectId];
 }
 
@@ -62,7 +86,11 @@ async function runTest() {
   }
 
   try {
-    const operators = await getDistributionOperators();
+    const [distributionOperators, storageOperators] = await Promise.all([
+      getDistributionOperators(),
+      getStorageOperators(),
+    ]);
+    const operators = [...distributionOperators, ...storageOperators];
 
     const results = await Promise.all(
       operators.map((operator) => getOperatorStatus(operator)),
@@ -80,55 +108,90 @@ async function runTest() {
 }
 
 async function getOperatorStatus(
-  operator: GetDistributorOperatorsQuery["distributionBucketOperators"][0],
+  operatorOrBucket: RawOperatorData,
 ): Promise<OperatorPingResult> {
-  const distributingStatus: OperatorPingResult["distributingStatus"] = operator
-    .distributionBucket.distributing
-    ? "distributing"
-    : "not-distributing";
-  const commonFields = {
-    time: new Date(),
-    source: SOURCE_ID,
-    version: packageVersion,
-    operatorId: operator.id,
-    distributionBucketId: operator.distributionBucket.id,
-    workerId: operator.workerId,
-    nodeEndpoint: operator?.metadata?.nodeEndpoint ?? "",
-    statusEndpoint: `${operator?.metadata?.nodeEndpoint}api/v1/status`,
-    distributingStatus,
-  };
+  let pingResult: DistributionOperatorPingResult | StorageOperatorPingResult;
 
-  if (!operator?.metadata?.nodeEndpoint) {
-    return { ...commonFields, pingStatus: "dead", error: "No node endpoint" };
+  if (operatorOrBucket.__typename === "DistributionBucketOperator") {
+    const distributingStatus: DistributionOperatorPingResult["distributingStatus"] =
+      operatorOrBucket.distributionBucket.distributing
+        ? "distributing"
+        : "not-distributing";
+
+    pingResult = {
+      time: new Date(),
+      source: SOURCE_ID,
+      version: packageVersion,
+      operatorId: operatorOrBucket.id,
+      bucketId: operatorOrBucket.distributionBucket.id,
+      workerId: operatorOrBucket.workerId,
+      nodeEndpoint: operatorOrBucket?.metadata?.nodeEndpoint ?? "",
+      statusEndpoint: `${operatorOrBucket?.metadata?.nodeEndpoint}api/v1/status`,
+      distributingStatus,
+      operatorType: "distribution",
+    } as DistributionOperatorPingResult;
+  } else if (operatorOrBucket.__typename === "StorageBucket") {
+    if (
+      operatorOrBucket.operatorStatus.__typename !==
+      "StorageBucketOperatorStatusActive"
+    ) {
+      throw new Error(
+        `Unknown operator status: ${operatorOrBucket.operatorStatus.__typename}`,
+      );
+    }
+
+    const nodeEndpoint = operatorOrBucket.operatorMetadata?.nodeEndpoint ?? "";
+
+    pingResult = {
+      time: new Date(),
+      source: SOURCE_ID,
+      version: packageVersion,
+      operatorId: operatorOrBucket.operatorStatus.workerId.toString(),
+      bucketId: operatorOrBucket.id,
+      workerId: operatorOrBucket.operatorStatus.workerId,
+      nodeEndpoint,
+      statusEndpoint: `${nodeEndpoint}api/v1/status`,
+      operatorType: "storage",
+    } as StorageOperatorPingResult;
+  } else {
+    throw new Error("Unknown operator type");
   }
-  const nodeStatus = await getDistributionOpearatorStatus(
-    operator?.metadata?.nodeEndpoint,
-  );
+
+  if (!pingResult.nodeEndpoint) {
+    return { ...pingResult, pingStatus: "dead", error: "No node endpoint" };
+  }
+  const nodeStatus = await getOperatorNodeStatus(pingResult.nodeEndpoint);
   if (!nodeStatus) {
     return {
-      ...commonFields,
+      ...pingResult,
       pingStatus: "dead",
       error: "Failed to fetch status",
     };
   }
 
-  const [assetDownloadType, testAssetId] = getTestObjectId();
+  const [assetDownloadType, testAssetId] = getTestObjectId(
+    pingResult.operatorType,
+  );
+
+  const assetUrl =
+    pingResult.operatorType === "distribution"
+      ? `${pingResult.nodeEndpoint}api/v1/assets/${testAssetId}`
+      : `${pingResult.nodeEndpoint}api/v1/files/${testAssetId}`;
 
   const sampleAssetResult = await runAssetBenchmark(
-    `${operator?.metadata?.nodeEndpoint}api/v1/assets/${testAssetId}`,
+    assetUrl,
     MEDIA_DOWNLOAD_SIZE,
     1,
     DEBUG,
   );
 
   return {
-    ...commonFields,
+    ...pingResult,
     pingStatus:
       sampleAssetResult.status === "success" ? "ok" : "asset-download-failed",
     assetDownloadResult: sampleAssetResult,
     assetDownloadType,
     nodeStatus,
-    opereatorMetadata: operator.metadata,
   };
 }
 
@@ -141,32 +204,27 @@ async function findOperatorDegradations(
     return sorted[middle];
   };
 
+  const okResults = operatorsResults.filter(
+    (result) =>
+      result.pingStatus === "ok" &&
+      (result.operatorType !== "distribution" ||
+        result.distributingStatus === "distributing"),
+  );
+
   const medianBlocksProcessed = getMedian(
-    operatorsResults
-      .filter(
-        (result) =>
-          result.pingStatus === "ok" &&
-          result.distributingStatus === "distributing",
-      )
-      .map(
-        (result) =>
-          ((result as any).nodeStatus as DistributionOperatorStatus)
-            .queryNodeStatus.blocksProcessed,
-      ),
+    okResults.map(
+      (result) =>
+        ((result as any).nodeStatus as OperatorNodeStatus).queryNodeStatus
+          .blocksProcessed,
+    ),
   );
 
   const medianChainHead = getMedian(
-    operatorsResults
-      .filter(
-        (result) =>
-          result.pingStatus === "ok" &&
-          result.distributingStatus === "distributing",
-      )
-      .map(
-        (result) =>
-          ((result as any).nodeStatus as DistributionOperatorStatus)
-            .queryNodeStatus.chainHead,
-      ),
+    okResults.map(
+      (result) =>
+        ((result as any).nodeStatus as OperatorNodeStatus).queryNodeStatus
+          .chainHead,
+    ),
   );
 
   return operatorsResults.map((result) => {
@@ -198,7 +256,7 @@ async function findOperatorDegradations(
 
 async function getDistributionOperators() {
   const data = await graphqlRequest({
-    document: getOperatorsDataQueryDocument,
+    document: getDistributionOperatorsQueryDocument,
     url: GRAPHQL_URL,
     requestHeaders: {
       "User-Agent": userAgent,
@@ -207,9 +265,20 @@ async function getDistributionOperators() {
   return data.distributionBucketOperators;
 }
 
-async function getDistributionOpearatorStatus(
+async function getStorageOperators() {
+  const data = await graphqlRequest({
+    document: getStorageOperatorsQueryDocument,
+    url: GRAPHQL_URL,
+    requestHeaders: {
+      "User-Agent": userAgent,
+    },
+  });
+  return data.storageBuckets;
+}
+
+async function getOperatorNodeStatus(
   nodeEndpoint: string,
-): Promise<DistributionOperatorStatus | null> {
+): Promise<DistributionOperatorNodeStatus | StorageOperatorNodeStatus | null> {
   try {
     const response = await fetch(`${nodeEndpoint}api/v1/status`, {
       headers: {
@@ -223,7 +292,7 @@ async function getDistributionOpearatorStatus(
       return null;
     }
     const json = await response.json();
-    return json as DistributionOperatorStatus;
+    return json as DistributionOperatorNodeStatus | StorageOperatorNodeStatus;
   } catch (error) {
     console.error(`Failed to fetch status from ${nodeEndpoint}`);
     console.error(error);

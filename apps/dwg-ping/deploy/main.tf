@@ -1,7 +1,7 @@
 variable "regions" {
   description = "List of regions to deploy Cloud Run jobs"
   type        = list(string)
-  default     = ["asia-southeast2", "us-east1", "us-west1", "europe-west2", "europe-central2", "southamerica-east1", "asia-south1", "asia-northeast1"]
+  default     = ["us-east4", "us-west1", "southamerica-west1", "southamerica-east1", "europe-central2", "europe-southwest1", "me-west1", "asia-south2", "asia-southeast2", "asia-northeast3"]
 }
 
 variable "elastic_url" {

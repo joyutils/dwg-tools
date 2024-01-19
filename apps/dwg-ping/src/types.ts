@@ -1,28 +1,33 @@
 import { BenchmarkResult } from "@joyutils/dwg-utils";
-import { GetDistributorOperatorsQuery } from "./gql/graphql.js";
-
-export type OperatorMetadata =
-  GetDistributorOperatorsQuery["distributionBucketOperators"][number]["metadata"];
+import {
+  GetDistributorOperatorsQuery,
+  GetStorageOperatorsQuery,
+} from "./gql/graphql.js";
 
 export type AssetType = "thumbnail" | "media";
 
-export type OperatorPingResult = {
+export type RawOperatorData =
+  | GetDistributorOperatorsQuery["distributionBucketOperators"][number]
+  | GetStorageOperatorsQuery["storageBuckets"][number];
+
+export type OperatorType = "distribution" | "storage";
+
+export type GenericOperatorPingResult = {
   time: Date;
   operatorId: string;
-  distributionBucketId: string;
   workerId: number;
+  bucketId: string;
   nodeEndpoint: string;
   statusEndpoint: string;
-  distributingStatus: "distributing" | "not-distributing";
   source: string;
   version: string;
+  operatorType: OperatorType;
 } & (
   | {
       pingStatus: "ok" | "asset-download-failed";
       assetDownloadType: AssetType;
       assetDownloadResult: BenchmarkResult;
-      nodeStatus: DistributionOperatorStatus;
-      opereatorMetadata: OperatorMetadata;
+      nodeStatus: OperatorNodeStatus;
       chainHeadDiff?: number;
       blocksProcessedDiff?: number;
     }
@@ -30,21 +35,29 @@ export type OperatorPingResult = {
       pingStatus: "degraded";
       assetDownloadType: AssetType;
       assetDownloadResult: BenchmarkResult;
-      nodeStatus: DistributionOperatorStatus;
-      opereatorMetadata: OperatorMetadata;
+      nodeStatus: OperatorNodeStatus;
       refChainHead: number;
       refBlocksProcessed: number;
     }
   | { pingStatus: "dead"; error: string }
 );
 
-export type DistributionOperatorQueryNodeStatus = {
+export type DistributionOperatorPingResult = GenericOperatorPingResult & {
+  operatorType: "distribution";
+  distributingStatus: "distributing" | "not-distributing";
+};
+
+export type StorageOperatorPingResult = GenericOperatorPingResult & {
+  operatorType: "storage";
+};
+
+export type OperatorQueryNodeStatus = {
   url: string;
   chainHead: number;
   blocksProcessed: number;
 };
 
-export type DistributionOperatorStatus = {
+export type DistributionOperatorNodeStatus = {
   id: string;
   version: string;
   objectsInCache: number;
@@ -52,11 +65,28 @@ export type DistributionOperatorStatus = {
   storageUsed: number;
   uptime: number;
   downloadsInProgress: number;
-  queryNodeStatus: DistributionOperatorQueryNodeStatus;
+  queryNodeStatus: OperatorQueryNodeStatus;
 };
 
-export type SampleAssetTestResult = {
-  ok: boolean;
-  statusCode?: number;
-  responseTimeMs?: number;
+export type StorageOperatorNodeStatus = {
+  version: string;
+  downloadBuckets: string[];
+  uploadBuckets: string[];
+  sync: {
+    enabled: boolean;
+    interval: number;
+  };
+  cleanup: {
+    enabled: boolean;
+    interval: number;
+  };
+  queryNodeStatus: OperatorQueryNodeStatus;
 };
+
+export type OperatorNodeStatus =
+  | DistributionOperatorNodeStatus
+  | StorageOperatorNodeStatus;
+
+export type OperatorPingResult =
+  | DistributionOperatorPingResult
+  | StorageOperatorPingResult;
