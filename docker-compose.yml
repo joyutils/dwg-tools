@@ -1,11 +1,11 @@
 version: "3.7"
 
 services:
-  dwg-alerter:
+  operators-alerter:
     build:
       context: .
-      dockerfile: apps/dwg-alerter/Dockerfile
-    container_name: dwg-alerter
+      dockerfile: apps/operators-alerter/Dockerfile
+    container_name: operators-alerter
     env_file: .env
     environment:
       - ALERTS_FILE_PATH=/data/alerts.json

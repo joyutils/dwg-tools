@@ -5,7 +5,7 @@
     "dev": "turbo run dev",
     "lint": "turbo run lint",
     "format": "prettier --write \"**/*.{ts,tsx,md}\"",
-    "docker:build:alerter": "docker build -t joyutils/dwg-alerter -f apps/dwg-alerter/Dockerfile .",
+    "docker:build:alerter": "docker build -t joyutils/operators-alerter -f apps/operators-alerter/Dockerfile .",
     "docker:build:ping": "docker build -t joyutils/operators-ping -f apps/operators-ping/Dockerfile ."
   },
   "devDependencies": {

@@ -1,6 +1,6 @@
 {
-  "name": "@joyutils/dwg-alerter",
-  "version": "0.1.0",
+  "name": "@joyutils/operators-alerter",
+  "version": "1.0.0",
   "private": true,
   "type": "module",
   "scripts": {

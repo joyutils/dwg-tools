@@ -7,7 +7,7 @@ FROM base AS builder
 WORKDIR /app
 RUN pnpm add -g turbo
 COPY . .
-RUN turbo prune @joyutils/dwg-alerter --docker
+RUN turbo prune @joyutils/operators-alerter --docker
 
 # Add lockfile and package.json's of isolated subworkspace
 FROM base AS installer
@@ -23,11 +23,11 @@ RUN pnpm install
 COPY --from=builder /app/out/full/ .
 COPY turbo.json turbo.json
 
-RUN pnpm turbo run build --filter=dwg-alerter...
+RUN pnpm turbo run build --filter=operators-alerter...
 
 FROM base AS runner
 WORKDIR /app
 
 COPY --from=installer /app .
 
-CMD node apps/dwg-alerter/dist/index.js
+CMD node apps/operators-alerter/dist/index.js
