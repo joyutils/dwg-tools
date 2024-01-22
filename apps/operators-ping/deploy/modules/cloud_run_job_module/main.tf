@@ -27,7 +27,7 @@ resource "google_cloud_run_v2_job" "default" {
   template {
     template {
       containers {
-        image = "europe-central2-docker.pkg.dev/joyutils/dwg/operators-ping:1.0.1"
+        image = "europe-central2-docker.pkg.dev/joyutils/dwg/operators-ping:1.0.2"
 
         env {
           name  = "ELASTICSEARCH_URL"
