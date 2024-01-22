@@ -1,4 +1,4 @@
-import { Client, Transport } from "@elastic/elasticsearch";
+import { Client } from "@elastic/elasticsearch";
 import { getRequiredEnv } from "./env";
 
 export class ElasticClient {
@@ -8,11 +8,8 @@ export class ElasticClient {
   }
 
   static async init(config: ElasticConfig): Promise<ElasticClient> {
-    const url = new URL(config.url);
     const esClient = new Client({
-      node: url.origin,
-      // @ts-ignore
-      Transport: createElasticTransport(url.pathname),
+      node: config.url,
       auth: {
         username: config.username,
         password: config.password,
@@ -33,7 +30,7 @@ export class ElasticClient {
 
   async writeDocuments(
     indexName: string,
-    documents: object[]
+    documents: object[],
   ): Promise<boolean> {
     const body = documents.flatMap((d) => [
       { index: { _index: indexName } },
@@ -48,16 +45,6 @@ export class ElasticClient {
       return false;
     }
   }
-}
-
-function createElasticTransport(prefix: string) {
-  return class MTransport extends Transport {
-    // @ts-ignore
-    async request(params: any, options: any) {
-      params.path = prefix + params.path;
-      return super.request(params, options);
-    }
-  };
 }
 
 export type ElasticConfig = {

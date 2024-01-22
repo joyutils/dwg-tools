@@ -1,48 +1,57 @@
 import { getRequiredEnv } from "@joyutils/dwg-utils";
-import { Alert, AlertsElastic } from "./elastic";
-import { AlertsStore } from "./store";
+import { Alert, AlertsElastic } from "./elastic.js";
+import { AlertsStore } from "./store.js";
 import { fetch } from "undici";
 import cron from "cron";
 
 class Alerter {
   private es: AlertsElastic;
   private store: AlertsStore;
-  private discordWebhookUrl: string;
+  readonly dwgDiscordWebhookUrl: string;
+  readonly swgDiscordWebhookUrl: string;
 
   protected constructor(
     es: AlertsElastic,
     store: AlertsStore,
-    discordWebhookUrl: string
+    discordWebhookUrl: string,
+    swgDiscordWebhookUrl: string,
   ) {
     this.es = es;
     this.store = store;
-    this.discordWebhookUrl = discordWebhookUrl;
+    this.dwgDiscordWebhookUrl = discordWebhookUrl;
+    this.swgDiscordWebhookUrl = swgDiscordWebhookUrl;
   }
 
   static async init(): Promise<Alerter> {
-    const discordWebhookUrl = getRequiredEnv("DISCORD_WEBHOOK_URL");
+    const dwgDiscordWebhookUrl = getRequiredEnv("DWG_DISCORD_WEBHOOK_URL");
+    const swgDiscordWebhookUrl = getRequiredEnv("SWG_DISCORD_WEBHOOK_URL");
     const es = await AlertsElastic.init();
     const store = await AlertsStore.init();
 
-    return new Alerter(es, store, discordWebhookUrl);
+    return new Alerter(es, store, dwgDiscordWebhookUrl, swgDiscordWebhookUrl);
   }
 
-  async handleAlert(alert: Alert) {
-    console.log(`Handling alert ${alert.id}`);
+  async handleAlert(alert: Alert, type: "dwg" | "swg") {
+    console.log(`Handling ${type} alert ${alert.id}`);
     try {
-      const response = await fetch(this.discordWebhookUrl, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
+      const response = await fetch(
+        type === "dwg" ? this.dwgDiscordWebhookUrl : this.swgDiscordWebhookUrl,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            username: type === "dwg" ? "DWG Alert" : "SWG Alert",
+            content: `<@&${
+              type === "dwg" ? "979001667934646272" : "979001488481353819"
+            }> New incident involving operator ${alert.operator}`,
+          }),
         },
-        body: JSON.stringify({
-          username: "DWG alert",
-          content: `<@&979001667934646272> New incident involving operator ${alert.operator}`,
-        }),
-      });
+      );
       if (response.status !== 204) {
         throw new Error(
-          `Discord webhook responded with status ${response.status}`
+          `Discord webhook responded with status ${response.status}`,
         );
       }
       console.log("Sent Discord alert");
@@ -56,25 +65,35 @@ class Alerter {
   async run() {
     console.log(`Starting alerter run at ${new Date().toISOString()}`);
 
-    const elasticAlerts = await this.es.getAlerts();
     const handledAlerts = await this.store.getHandledAlertsIds();
     const handledAlertsLookup = handledAlerts.reduce(
       (acc, id) => {
         acc[id] = true;
         return acc;
       },
-      {} as Record<string, boolean>
+      {} as Record<string, boolean>,
     );
-    const unhandledAlerts = elasticAlerts.filter(
-      (a) => !handledAlertsLookup[a.id]
+
+    const dwgAlerts = await this.es.getDistributionAlerts();
+    const unhandledDwgAlerts = dwgAlerts.filter(
+      (alert) => !handledAlertsLookup[alert.id],
     );
-    if (unhandledAlerts.length === 0) {
-      console.log("Done - no unhandled alerts");
-      return;
+    if (unhandledDwgAlerts.length === 0) {
+      console.log("No unhandled DWG alerts");
     }
-    console.log("Found unhandled alerts", unhandledAlerts);
-    for (const alert of unhandledAlerts) {
-      await this.handleAlert(alert);
+    for (const alert of unhandledDwgAlerts) {
+      await this.handleAlert(alert, "dwg");
+    }
+
+    const swgAlerts = await this.es.getStorageAlerts();
+    const unhandledSwgAlerts = swgAlerts.filter(
+      (alert) => !handledAlertsLookup[alert.id],
+    );
+    if (unhandledSwgAlerts.length === 0) {
+      console.log("No unhandled SWG alerts");
+    }
+    for (const alert of unhandledSwgAlerts) {
+      await this.handleAlert(alert, "swg");
     }
 
     console.log("Done");

@@ -19,7 +19,24 @@ export class AlertsElastic {
     return new AlertsElastic(es);
   }
 
-  async getAlerts(): Promise<Alert[]> {
+  private parseAlerts(rawAlerts: any[]): Alert[] {
+    const alerts: Alert[] = [];
+    for (const hit of rawAlerts) {
+      const parsed = rawAlertSchema.safeParse(hit);
+      if (parsed.success) {
+        alerts.push({
+          id: parsed.data._id,
+          timestamp: parsed.data._source["@timestamp"],
+          operator: parsed.data._source.kibana.alert.id,
+        });
+      } else {
+        console.error("Couldn't parse ES alert", parsed.error);
+      }
+    }
+    return alerts;
+  }
+
+  async getDistributionAlerts(): Promise<Alert[]> {
     const result = await this.es.nativeClient.search({
       index: "kibana-alert-history-distributors",
       body: {
@@ -33,20 +50,24 @@ export class AlertsElastic {
         },
       },
     });
-    const alerts: Alert[] = [];
-    for (const hit of result.hits.hits) {
-      const parsed = rawAlertSchema.safeParse(hit);
-      if (parsed.success) {
-        alerts.push({
-          id: parsed.data._id,
-          timestamp: parsed.data._source["@timestamp"],
-          operator: parsed.data._source.kibana.alert.id,
-        });
-      } else {
-        console.error("Couldn't parse ES alert", parsed.error);
-      }
-    }
-    return alerts;
+    return this.parseAlerts(result.hits.hits);
+  }
+
+  async getStorageAlerts(): Promise<Alert[]> {
+    const result = await this.es.nativeClient.search({
+      index: "kibana-alert-history-storage",
+      body: {
+        query: {
+          range: {
+            "@timestamp": {
+              gte: "now-90h/h",
+              lte: "now/h",
+            },
+          },
+        },
+      },
+    });
+    return this.parseAlerts(result.hits.hits);
   }
 }
 
