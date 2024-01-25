@@ -211,7 +211,7 @@ async function findOperatorDegradations(
       qnStatus.blocksProcessed - medianBlocksProcessed,
     );
     const chainHeadDiff = Math.abs(qnStatus.chainHead - medianChainHead);
-    const THRESHOLD = 10;
+    const THRESHOLD = 100;
 
     if (blocksProcessedDiff > THRESHOLD || chainHeadDiff > THRESHOLD) {
       return {
