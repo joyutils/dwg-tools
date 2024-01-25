@@ -65,38 +65,43 @@ class Alerter {
   async run() {
     console.log(`Starting alerter run at ${new Date().toISOString()}`);
 
-    const handledAlerts = await this.store.getHandledAlertsIds();
-    const handledAlertsLookup = handledAlerts.reduce(
-      (acc, id) => {
-        acc[id] = true;
-        return acc;
-      },
-      {} as Record<string, boolean>,
-    );
+    try {
+      const handledAlerts = await this.store.getHandledAlertsIds();
+      const handledAlertsLookup = handledAlerts.reduce(
+        (acc, id) => {
+          acc[id] = true;
+          return acc;
+        },
+        {} as Record<string, boolean>,
+      );
 
-    const dwgAlerts = await this.es.getDistributionAlerts();
-    const unhandledDwgAlerts = dwgAlerts.filter(
-      (alert) => !handledAlertsLookup[alert.id],
-    );
-    if (unhandledDwgAlerts.length === 0) {
-      console.log("No unhandled DWG alerts");
-    }
-    for (const alert of unhandledDwgAlerts) {
-      await this.handleAlert(alert, "dwg");
-    }
+      const dwgAlerts = await this.es.getDistributionAlerts();
+      const unhandledDwgAlerts = dwgAlerts.filter(
+        (alert) => !handledAlertsLookup[alert.id],
+      );
+      if (unhandledDwgAlerts.length === 0) {
+        console.log("No unhandled DWG alerts");
+      }
+      for (const alert of unhandledDwgAlerts) {
+        await this.handleAlert(alert, "dwg");
+      }
 
-    const swgAlerts = await this.es.getStorageAlerts();
-    const unhandledSwgAlerts = swgAlerts.filter(
-      (alert) => !handledAlertsLookup[alert.id],
-    );
-    if (unhandledSwgAlerts.length === 0) {
-      console.log("No unhandled SWG alerts");
-    }
-    for (const alert of unhandledSwgAlerts) {
-      await this.handleAlert(alert, "swg");
-    }
+      const swgAlerts = await this.es.getStorageAlerts();
+      const unhandledSwgAlerts = swgAlerts.filter(
+        (alert) => !handledAlertsLookup[alert.id],
+      );
+      if (unhandledSwgAlerts.length === 0) {
+        console.log("No unhandled SWG alerts");
+      }
+      for (const alert of unhandledSwgAlerts) {
+        await this.handleAlert(alert, "swg");
+      }
 
-    console.log("Done");
+      console.log("Done");
+    } catch (e) {
+      console.error("Alerter run failed");
+      console.error(e);
+    }
   }
 }
 
