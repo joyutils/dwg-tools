@@ -255,10 +255,13 @@ async function getOperatorNodeStatus(
   nodeEndpoint: string,
 ): Promise<DistributionOperatorNodeStatus | StorageOperatorNodeStatus | null> {
   try {
+    const abortController = new AbortController();
+    setTimeout(() => abortController.abort(), 5000);
     const response = await fetch(`${nodeEndpoint}api/v1/status`, {
       headers: {
         "User-Agent": userAgent,
       },
+      signal: abortController.signal,
     });
     if (response.status !== 200) {
       console.error(
