@@ -27,7 +27,7 @@ resource "google_cloud_run_v2_job" "default" {
   template {
     template {
       containers {
-        image = "europe-central2-docker.pkg.dev/joyutils/dwg/operators-ping:1.0.2"
+        image = "europe-central2-docker.pkg.dev/joyutils/dwg/operators-ping:1.1.0"
 
         env {
           name  = "ELASTICSEARCH_URL"
@@ -68,7 +68,7 @@ resource "google_cloud_scheduler_job" "scheduler" {
   name        = "scheduler-${google_cloud_run_v2_job.default.name}"
   description = "Scheduler for Cloud Run Job"
   region      = "europe-west1"
-  schedule    = "*/10 * * * *"
+  schedule    = "*/20 * * * *"
   project     = "joyutils"
 
   http_target {

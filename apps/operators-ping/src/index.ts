@@ -207,13 +207,20 @@ async function findOperatorDegradations(
       return result;
     }
     const qnStatus = result.nodeStatus.queryNodeStatus;
-    const blocksProcessedDiff = Math.abs(
-      qnStatus.blocksProcessed - medianBlocksProcessed,
-    );
-    const chainHeadDiff = Math.abs(qnStatus.chainHead - medianChainHead);
-    const THRESHOLD = 100;
 
-    if (blocksProcessedDiff > THRESHOLD || chainHeadDiff > THRESHOLD) {
+    const blocksProcessedDiff =
+      qnStatus.blocksProcessed - medianBlocksProcessed;
+    const chainHeadDiff = qnStatus.chainHead - medianChainHead;
+
+    const BEHIND_THRESHOLD = 100;
+    const AHEAD_THRESHOLD = 2000;
+
+    if (
+      blocksProcessedDiff > AHEAD_THRESHOLD ||
+      blocksProcessedDiff < -BEHIND_THRESHOLD ||
+      chainHeadDiff > AHEAD_THRESHOLD ||
+      chainHeadDiff < -BEHIND_THRESHOLD
+    ) {
       return {
         ...result,
         pingStatus: "degraded",
